@@ -260,5 +260,78 @@ describe("createTypingCallbacks", () => {
         vi.useRealTimers();
       }
     });
+
+    it("skips typing for isolated cron sessions", async () => {
+      const start = vi.fn().mockResolvedValue(undefined);
+      const stop = vi.fn().mockResolvedValue(undefined);
+      const onStartError = vi.fn();
+
+      // Isolated cron session key pattern
+      const cronSessionKey = "agent:default:cron:daily-report:run:abc123";
+
+      const callbacks = createTypingCallbacks({
+        start,
+        stop,
+        onStartError,
+        sessionKey: cronSessionKey,
+      });
+
+      // onReplyStart should not call start for isolated cron
+      await callbacks.onReplyStart();
+      expect(start).not.toHaveBeenCalled();
+
+      // onIdle should not call stop
+      callbacks.onIdle?.();
+      expect(stop).not.toHaveBeenCalled();
+
+      // onCleanup should not call stop
+      callbacks.onCleanup?.();
+      expect(stop).not.toHaveBeenCalled();
+    });
+
+    it("allows typing for regular user sessions", async () => {
+      const start = vi.fn().mockResolvedValue(undefined);
+      const stop = vi.fn().mockResolvedValue(undefined);
+      const onStartError = vi.fn();
+
+      // Regular user DM session
+      const userSessionKey = "agent:default:telegram:dm:123456789";
+
+      const callbacks = createTypingCallbacks({
+        start,
+        stop,
+        onStartError,
+        sessionKey: userSessionKey,
+      });
+
+      // onReplyStart should call start for regular user session
+      await callbacks.onReplyStart();
+      expect(start).toHaveBeenCalledTimes(1);
+
+      // onIdle should call stop
+      callbacks.onIdle?.();
+      await flushMicrotasks();
+      expect(stop).toHaveBeenCalledTimes(1);
+    });
+
+    it("allows typing for main cron sessions (non-isolated)", async () => {
+      const start = vi.fn().mockResolvedValue(undefined);
+      const stop = vi.fn().mockResolvedValue(undefined);
+      const onStartError = vi.fn();
+
+      // Main cron session (not isolated, no :run: in key)
+      const mainCronSessionKey = "cron:daily-report";
+
+      const callbacks = createTypingCallbacks({
+        start,
+        stop,
+        onStartError,
+        sessionKey: mainCronSessionKey,
+      });
+
+      // onReplyStart should call start for main cron session
+      await callbacks.onReplyStart();
+      expect(start).toHaveBeenCalledTimes(1);
+    });
   });
 });

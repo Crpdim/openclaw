@@ -15,9 +15,21 @@ export type CreateTypingCallbacksParams = {
   keepaliveIntervalMs?: number;
   /** Maximum duration for typing indicator before auto-cleanup (safety TTL). Default: 60s */
   maxDurationMs?: number;
+  /** Session key for context-aware typing decisions (e.g., skip typing for isolated cron) */
+  sessionKey?: string;
 };
 
 export function createTypingCallbacks(params: CreateTypingCallbacksParams): TypingCallbacks {
+  // Skip typing for isolated cron sessions (they shouldn't send typing to user DM)
+  // Isolated cron session keys contain ':cron:' and ':run:'
+  if (params.sessionKey?.includes(":cron:") && params.sessionKey?.includes(":run:")) {
+    return {
+      onReplyStart: async () => {},
+      onIdle: () => {},
+      onCleanup: () => {},
+    };
+  }
+
   const stop = params.stop;
   const keepaliveIntervalMs = params.keepaliveIntervalMs ?? 3_000;
   const maxDurationMs = params.maxDurationMs ?? 60_000; // Default 60s TTL

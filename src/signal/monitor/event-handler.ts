@@ -224,6 +224,7 @@ export function createSignalEventHandler(deps: SignalEventHandlerDeps) {
           error: err,
         });
       },
+      sessionKey: ctxPayload.SessionKey,
     });
 
     const { dispatcher, replyOptions, markDispatchIdle } = createReplyDispatcherWithTyping({
