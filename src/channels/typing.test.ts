@@ -109,4 +109,229 @@ describe("createTypingCallbacks", () => {
       vi.useRealTimers();
     }
   });
+
+  // ========== TTL Safety Tests ==========
+  describe("TTL safety", () => {
+    it("auto-stops typing after maxDurationMs", async () => {
+      vi.useFakeTimers();
+      try {
+        const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const start = vi.fn().mockResolvedValue(undefined);
+        const stop = vi.fn().mockResolvedValue(undefined);
+        const onStartError = vi.fn();
+        const callbacks = createTypingCallbacks({
+          start,
+          stop,
+          onStartError,
+          maxDurationMs: 10_000,
+        });
+
+        await callbacks.onReplyStart();
+        expect(start).toHaveBeenCalledTimes(1);
+        expect(stop).not.toHaveBeenCalled();
+
+        // Advance past TTL
+        await vi.advanceTimersByTimeAsync(10_000);
+
+        // Should auto-stop
+        expect(stop).toHaveBeenCalledTimes(1);
+        expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining("TTL exceeded"));
+
+        consoleWarn.mockRestore();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("does not auto-stop if idle is called before TTL", async () => {
+      vi.useFakeTimers();
+      try {
+        const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const start = vi.fn().mockResolvedValue(undefined);
+        const stop = vi.fn().mockResolvedValue(undefined);
+        const onStartError = vi.fn();
+        const callbacks = createTypingCallbacks({
+          start,
+          stop,
+          onStartError,
+          maxDurationMs: 10_000,
+        });
+
+        await callbacks.onReplyStart();
+
+        // Stop before TTL
+        await vi.advanceTimersByTimeAsync(5_000);
+        callbacks.onIdle?.();
+        await flushMicrotasks();
+
+        expect(stop).toHaveBeenCalledTimes(1);
+
+        // Advance past original TTL
+        await vi.advanceTimersByTimeAsync(10_000);
+
+        // Should not have triggered TTL warning
+        expect(consoleWarn).not.toHaveBeenCalled();
+        // Stop should still be called only once
+        expect(stop).toHaveBeenCalledTimes(1);
+
+        consoleWarn.mockRestore();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("uses default 60s TTL when not specified", async () => {
+      vi.useFakeTimers();
+      try {
+        const start = vi.fn().mockResolvedValue(undefined);
+        const stop = vi.fn().mockResolvedValue(undefined);
+        const onStartError = vi.fn();
+        const callbacks = createTypingCallbacks({ start, stop, onStartError });
+
+        await callbacks.onReplyStart();
+
+        // Should not stop at 59s
+        await vi.advanceTimersByTimeAsync(59_000);
+        expect(stop).not.toHaveBeenCalled();
+
+        // Should stop at 60s
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(stop).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("disables TTL when maxDurationMs is 0", async () => {
+      vi.useFakeTimers();
+      try {
+        const start = vi.fn().mockResolvedValue(undefined);
+        const stop = vi.fn().mockResolvedValue(undefined);
+        const onStartError = vi.fn();
+        const callbacks = createTypingCallbacks({
+          start,
+          stop,
+          onStartError,
+          maxDurationMs: 0,
+        });
+
+        await callbacks.onReplyStart();
+
+        // Should not auto-stop even after long time
+        await vi.advanceTimersByTimeAsync(300_000);
+        expect(stop).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("resets TTL timer on restart after idle", async () => {
+      vi.useFakeTimers();
+      try {
+        const start = vi.fn().mockResolvedValue(undefined);
+        const stop = vi.fn().mockResolvedValue(undefined);
+        const onStartError = vi.fn();
+        const callbacks = createTypingCallbacks({
+          start,
+          stop,
+          onStartError,
+          maxDurationMs: 10_000,
+        });
+
+        // First start
+        await callbacks.onReplyStart();
+        await vi.advanceTimersByTimeAsync(5_000);
+
+        // Idle and restart
+        callbacks.onIdle?.();
+        await flushMicrotasks();
+        expect(stop).toHaveBeenCalledTimes(1);
+
+        // Reset mock to track second start
+        stop.mockClear();
+
+        // After stop, callbacks are closed, so new onReplyStart should be no-op
+        await callbacks.onReplyStart();
+        await vi.advanceTimersByTimeAsync(15_000);
+
+        // Should not trigger stop again since it's closed
+        expect(stop).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("skips typing for isolated cron sessions", async () => {
+      const start = vi.fn().mockResolvedValue(undefined);
+      const stop = vi.fn().mockResolvedValue(undefined);
+      const onStartError = vi.fn();
+
+      // Isolated cron session key pattern
+      const cronSessionKey = "agent:default:cron:daily-report:run:abc123";
+
+      const callbacks = createTypingCallbacks({
+        start,
+        stop,
+        onStartError,
+        sessionKey: cronSessionKey,
+      });
+
+      // onReplyStart should not call start for isolated cron
+      await callbacks.onReplyStart();
+      expect(start).not.toHaveBeenCalled();
+
+      // onIdle should not call stop
+      callbacks.onIdle?.();
+      expect(stop).not.toHaveBeenCalled();
+
+      // onCleanup should not call stop
+      callbacks.onCleanup?.();
+      expect(stop).not.toHaveBeenCalled();
+    });
+
+    it("allows typing for regular user sessions", async () => {
+      const start = vi.fn().mockResolvedValue(undefined);
+      const stop = vi.fn().mockResolvedValue(undefined);
+      const onStartError = vi.fn();
+
+      // Regular user DM session
+      const userSessionKey = "agent:default:telegram:dm:123456789";
+
+      const callbacks = createTypingCallbacks({
+        start,
+        stop,
+        onStartError,
+        sessionKey: userSessionKey,
+      });
+
+      // onReplyStart should call start for regular user session
+      await callbacks.onReplyStart();
+      expect(start).toHaveBeenCalledTimes(1);
+
+      // onIdle should call stop
+      callbacks.onIdle?.();
+      await flushMicrotasks();
+      expect(stop).toHaveBeenCalledTimes(1);
+    });
+
+    it("allows typing for main cron sessions (non-isolated)", async () => {
+      const start = vi.fn().mockResolvedValue(undefined);
+      const stop = vi.fn().mockResolvedValue(undefined);
+      const onStartError = vi.fn();
+
+      // Main cron session (not isolated, no :run: in key)
+      const mainCronSessionKey = "cron:daily-report";
+
+      const callbacks = createTypingCallbacks({
+        start,
+        stop,
+        onStartError,
+        sessionKey: mainCronSessionKey,
+      });
+
+      // onReplyStart should call start for main cron session
+      await callbacks.onReplyStart();
+      expect(start).toHaveBeenCalledTimes(1);
+    });
+  });
 });

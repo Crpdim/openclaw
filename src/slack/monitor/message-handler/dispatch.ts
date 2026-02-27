@@ -147,6 +147,7 @@ export async function dispatchPreparedSlackMessage(prepared: PreparedSlackMessag
         error: err,
       });
     },
+    sessionKey: prepared.ctxPayload.SessionKey,
   });
 
   const { onModelSelected, ...prefixOptions } = createReplyPrefixOptions({

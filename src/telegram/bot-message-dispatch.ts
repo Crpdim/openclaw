@@ -428,6 +428,7 @@ export const dispatchTelegramMessage = async ({
         error: err,
       });
     },
+    sessionKey: ctxPayload.SessionKey,
   });
 
   try {
