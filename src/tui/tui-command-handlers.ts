@@ -516,8 +516,21 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           state.activeChatRunId = null;
           if (result.status === "ok") {
             forgetLocalRunId?.(runId);
+            try {
+              await loadHistory({ expectedActiveRunId: runId });
+            } catch (err) {
+              if (state.activeChatRunId && state.activeChatRunId !== runId) {
+                return;
+              }
+              chatLog.addSystem(`history reload failed: ${String(err)}`);
+              setActivityStatus("error");
+              tui.requestRender();
+              return;
+            }
+            if (state.activeChatRunId && state.activeChatRunId !== runId) {
+              return;
+            }
             setActivityStatus("idle");
-            await loadHistory({ expectedActiveRunId: runId });
           } else {
             forgetLocalRunId?.(runId);
             chatLog.addSystem(`run error: ${result.error ?? "unknown"}`);

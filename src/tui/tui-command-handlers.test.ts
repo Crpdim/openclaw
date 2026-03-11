@@ -217,6 +217,24 @@ describe("tui command handlers", () => {
     expect(requestRender).toHaveBeenCalled();
   });
 
+  it("surfaces history reload failures on the fallback ok path", async () => {
+    const loadHistory = vi.fn().mockRejectedValue(new Error("history rpc failed"));
+    const waitForRun = vi.fn().mockResolvedValue({ runId: "r1", status: "ok" });
+    const setActivityStatus = vi.fn();
+    const { handleCommand, addSystem } = createHarness({
+      loadHistory,
+      waitForRun,
+      setActivityStatus,
+    });
+
+    await handleCommand("/context");
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(addSystem).toHaveBeenCalledWith("history reload failed: Error: history rpc failed");
+    expect(setActivityStatus).toHaveBeenLastCalledWith("error");
+  });
+
   it("surfaces agent.wait errors when fallback detects a failed run", async () => {
     const waitForRun = vi.fn().mockResolvedValue({
       runId: "r1",
