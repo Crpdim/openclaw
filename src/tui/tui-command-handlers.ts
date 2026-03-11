@@ -35,7 +35,7 @@ type CommandHandlerContext = {
   openOverlay: (component: Component) => void;
   closeOverlay: () => void;
   refreshSessionInfo: () => Promise<void>;
-  loadHistory: () => Promise<void>;
+  loadHistory: (opts?: { expectedActiveRunId?: string }) => Promise<void>;
   setSession: (key: string) => Promise<void>;
   refreshAgents: () => Promise<void>;
   abortActive: () => Promise<void>;
@@ -510,19 +510,24 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           if (result.status === "timeout") {
             return;
           }
-          forgetLocalRunId?.(runId);
           state.activeChatRunId = null;
           if (result.status === "ok") {
             setActivityStatus("idle");
-            await loadHistory();
+            await loadHistory({ expectedActiveRunId: runId });
           } else {
+            forgetLocalRunId?.(runId);
             chatLog.addSystem(`run error: ${result.error ?? "unknown"}`);
             setActivityStatus("error");
           }
           tui.requestRender();
         })
-        .catch(() => {
+        .catch((err) => {
+          if (state.activeChatRunId !== runId) {
+            return;
+          }
           // Keep the event-driven path authoritative; agent.wait is best-effort fallback.
+          chatLog.addSystem(`agent.wait fallback failed: ${String(err)}`);
+          tui.requestRender();
         });
     } catch (err) {
       if (state.activeChatRunId) {

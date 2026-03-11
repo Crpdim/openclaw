@@ -12,6 +12,7 @@ function createHarness(params?: {
   setSession?: SetSessionMock;
   loadHistory?: LoadHistoryMock;
   setActivityStatus?: SetActivityStatusMock;
+  forgetLocalRunId?: ReturnType<typeof vi.fn>;
   isConnected?: boolean;
 }) {
   const sendChat = params?.sendChat ?? vi.fn().mockResolvedValue({ runId: "r1" });
@@ -24,6 +25,7 @@ function createHarness(params?: {
   const loadHistory =
     params?.loadHistory ?? (vi.fn().mockResolvedValue(undefined) as LoadHistoryMock);
   const setActivityStatus = params?.setActivityStatus ?? (vi.fn() as SetActivityStatusMock);
+  const forgetLocalRunId = params?.forgetLocalRunId ?? vi.fn();
 
   const { handleCommand } = createCommandHandlers({
     client: { sendChat, waitForRun, resetSession } as never,
@@ -48,7 +50,7 @@ function createHarness(params?: {
     formatSessionKey: vi.fn(),
     applySessionInfoFromPatch: vi.fn(),
     noteLocalRunId: vi.fn(),
-    forgetLocalRunId: vi.fn(),
+    forgetLocalRunId,
     requestExit: vi.fn(),
   });
 
@@ -63,6 +65,7 @@ function createHarness(params?: {
     requestRender,
     loadHistory,
     setActivityStatus,
+    forgetLocalRunId,
   };
 }
 
@@ -185,10 +188,12 @@ describe("tui command handlers", () => {
     const loadHistory = vi.fn().mockResolvedValue(undefined);
     const setActivityStatus = vi.fn();
     const waitForRun = vi.fn().mockResolvedValue({ runId: "r1", status: "ok" });
+    const forgetLocalRunId = vi.fn();
     const { handleCommand, requestRender } = createHarness({
       loadHistory,
       setActivityStatus,
       waitForRun,
+      forgetLocalRunId,
     });
 
     await handleCommand("/context");
@@ -200,6 +205,7 @@ describe("tui command handlers", () => {
       timeoutMs: 30_000,
     });
     expect(loadHistory).toHaveBeenCalledTimes(1);
+    expect(forgetLocalRunId).not.toHaveBeenCalled();
     expect(setActivityStatus).toHaveBeenLastCalledWith("idle");
     expect(requestRender).toHaveBeenCalled();
   });
@@ -222,5 +228,21 @@ describe("tui command handlers", () => {
 
     expect(addSystem).toHaveBeenCalledWith("run error: model backend hung up");
     expect(setActivityStatus).toHaveBeenLastCalledWith("error");
+  });
+
+  it("surfaces agent.wait fallback RPC failures without changing run state", async () => {
+    const waitForRun = vi.fn().mockRejectedValue(new Error("rpc timeout"));
+    const setActivityStatus = vi.fn();
+    const { handleCommand, addSystem } = createHarness({
+      waitForRun,
+      setActivityStatus,
+    });
+
+    await handleCommand("/context");
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(addSystem).toHaveBeenCalledWith("agent.wait fallback failed: Error: rpc timeout");
+    expect(setActivityStatus).not.toHaveBeenLastCalledWith("error");
   });
 });

@@ -271,4 +271,79 @@ describe("tui session actions", () => {
     expect(state.sessionInfo.modelProvider).toBe("openai");
     expect(state.sessionInfo.updatedAt).toBe(50);
   });
+
+  it("skips rebuilding history when a newer active run starts during guarded reload", async () => {
+    let resolveHistory: ((value: unknown) => void) | undefined;
+    const loadHistory = vi.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveHistory = resolve;
+        }),
+    );
+    const clearAll = vi.fn();
+    const addSystem = vi.fn();
+    const state: TuiStateAccess = {
+      agentDefaultId: "main",
+      sessionMainKey: "agent:main:main",
+      sessionScope: "global",
+      agents: [],
+      currentAgentId: "main",
+      currentSessionKey: "agent:main:main",
+      currentSessionId: null,
+      activeChatRunId: null,
+      historyLoaded: false,
+      sessionInfo: {},
+      initialSessionApplied: true,
+      isConnected: true,
+      autoMessageSent: false,
+      toolsExpanded: false,
+      showThinking: false,
+      connectionStatus: "connected",
+      activityStatus: "idle",
+      statusTimeout: null,
+      lastCtrlCAt: 0,
+    };
+
+    const { loadHistory: reloadHistory } = createSessionActions({
+      client: {
+        loadHistory,
+        listSessions: vi.fn().mockResolvedValue({
+          ts: Date.now(),
+          path: "/tmp/sessions.json",
+          count: 1,
+          defaults: {},
+          sessions: [],
+        }),
+      } as unknown as GatewayChatClient,
+      chatLog: {
+        addSystem,
+        addUser: vi.fn(),
+        finalizeAssistant: vi.fn(),
+        startTool: vi.fn(),
+        clearAll,
+      } as unknown as import("./components/chat-log.js").ChatLog,
+      tui: { requestRender: vi.fn() } as unknown as import("@mariozechner/pi-tui").TUI,
+      opts: {},
+      state,
+      agentNames: new Map(),
+      initialSessionInput: "",
+      initialSessionAgentId: null,
+      resolveSessionKey: vi.fn(),
+      updateHeader: vi.fn(),
+      updateFooter: vi.fn(),
+      updateAutocompleteProvider: vi.fn(),
+      setActivityStatus: vi.fn(),
+    });
+
+    const pending = reloadHistory({ expectedActiveRunId: "run-old" });
+    state.activeChatRunId = "run-new";
+    resolveHistory?.({
+      sessionId: "session-1",
+      messages: [],
+    });
+    await pending;
+
+    expect(clearAll).not.toHaveBeenCalled();
+    expect(addSystem).not.toHaveBeenCalledWith("session agent:main:main");
+  });
 });

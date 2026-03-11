@@ -276,7 +276,7 @@ export function createSessionActions(context: SessionActionContext) {
     applySessionInfo({ entry, force: true });
   };
 
-  const loadHistory = async () => {
+  const loadHistory = async (params?: { expectedActiveRunId?: string }) => {
     try {
       const history = await client.loadHistory({
         sessionKey: state.currentSessionKey,
@@ -291,6 +291,13 @@ export function createSessionActions(context: SessionActionContext) {
       state.currentSessionId = typeof record.sessionId === "string" ? record.sessionId : null;
       state.sessionInfo.thinkingLevel = record.thinkingLevel ?? state.sessionInfo.thinkingLevel;
       state.sessionInfo.verboseLevel = record.verboseLevel ?? state.sessionInfo.verboseLevel;
+      const guardedRunId = params?.expectedActiveRunId;
+      if (guardedRunId !== undefined) {
+        const activeRunId = state.activeChatRunId;
+        if (activeRunId && activeRunId !== guardedRunId) {
+          return;
+        }
+      }
       const showTools = (state.sessionInfo.verboseLevel ?? "off") !== "off";
       chatLog.clearAll();
       chatLog.addSystem(`session ${state.currentSessionKey}`);
