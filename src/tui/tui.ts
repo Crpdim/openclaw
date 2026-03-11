@@ -803,7 +803,7 @@ export async function runTui(opts: TuiOptions) {
     abortActive,
   } = sessionActions;
 
-  const { handleChatEvent, handleAgentEvent } = createEventHandlers({
+  const { handleChatEvent, handleAgentEvent, noteSuppressedRun } = createEventHandlers({
     chatLog,
     tui,
     state,
@@ -845,6 +845,7 @@ export async function runTui(opts: TuiOptions) {
       formatSessionKey,
       noteLocalRunId,
       forgetLocalRunId,
+      noteSuppressedRun,
       requestExit,
     });
 

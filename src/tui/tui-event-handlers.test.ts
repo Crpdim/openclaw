@@ -107,6 +107,41 @@ describe("tui-event-handlers: handleAgentEvent", () => {
     };
   };
 
+  it("ignores delayed chat final events after a run was suppressed by fallback", () => {
+    const { state, chatLog, setActivityStatus, loadHistory, handleChatEvent, noteSuppressedRun } =
+      createHandlersHarness({
+        state: { activeChatRunId: null },
+      });
+
+    noteSuppressedRun("run-suppressed");
+    handleChatEvent({
+      runId: "run-suppressed",
+      sessionKey: state.currentSessionKey,
+      state: "final",
+      message: { content: "late final" },
+    });
+
+    expect(chatLog.finalizeAssistant).not.toHaveBeenCalled();
+    expect(loadHistory).not.toHaveBeenCalled();
+    expect(setActivityStatus).not.toHaveBeenCalled();
+  });
+
+  it("ignores delayed agent lifecycle events after a run was suppressed by fallback", () => {
+    const { tui, setActivityStatus, handleAgentEvent, noteSuppressedRun } = createHandlersHarness({
+      state: { activeChatRunId: null },
+    });
+
+    noteSuppressedRun("run-suppressed");
+    handleAgentEvent({
+      runId: "run-suppressed",
+      stream: "lifecycle",
+      data: { phase: "end" },
+    });
+
+    expect(setActivityStatus).not.toHaveBeenCalled();
+    expect(tui.requestRender).not.toHaveBeenCalled();
+  });
+
   it("processes tool events when runId matches activeChatRunId (even if sessionId differs)", () => {
     const { chatLog, tui, handleAgentEvent } = createHandlersHarness({
       state: { currentSessionId: "session-xyz", activeChatRunId: "run-123" },

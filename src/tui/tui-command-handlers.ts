@@ -44,6 +44,7 @@ type CommandHandlerContext = {
   applySessionInfoFromPatch: (result: SessionsPatchResult) => void;
   noteLocalRunId: (runId: string) => void;
   forgetLocalRunId?: (runId: string) => void;
+  noteSuppressedRun?: (runId: string) => void;
   requestExit: () => void;
 };
 
@@ -67,6 +68,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
     applySessionInfoFromPatch,
     noteLocalRunId,
     forgetLocalRunId,
+    noteSuppressedRun,
     requestExit,
   } = context;
 
@@ -510,8 +512,10 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           if (result.status === "timeout") {
             return;
           }
+          noteSuppressedRun?.(runId);
           state.activeChatRunId = null;
           if (result.status === "ok") {
+            forgetLocalRunId?.(runId);
             setActivityStatus("idle");
             await loadHistory({ expectedActiveRunId: runId });
           } else {

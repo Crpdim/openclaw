@@ -45,6 +45,7 @@ export function createEventHandlers(context: EventHandlerContext) {
     clearLocalRunIds,
   } = context;
   const finalizedRuns = new Map<string, number>();
+  const suppressedRuns = new Map<string, number>();
   const sessionRuns = new Map<string, number>();
   let streamAssembler = new TuiStreamAssembler();
   let lastSessionKey = state.currentSessionKey;
@@ -78,6 +79,7 @@ export function createEventHandlers(context: EventHandlerContext) {
     }
     lastSessionKey = state.currentSessionKey;
     finalizedRuns.clear();
+    suppressedRuns.clear();
     sessionRuns.clear();
     streamAssembler = new TuiStreamAssembler();
     clearLocalRunIds?.();
@@ -93,6 +95,15 @@ export function createEventHandlers(context: EventHandlerContext) {
     sessionRuns.delete(runId);
     streamAssembler.drop(runId);
     pruneRunMap(finalizedRuns);
+  };
+
+  const noteSuppressedRun = (runId: string) => {
+    suppressedRuns.set(runId, Date.now());
+    finalizedRuns.set(runId, Date.now());
+    sessionRuns.delete(runId);
+    streamAssembler.drop(runId);
+    pruneRunMap(finalizedRuns);
+    pruneRunMap(suppressedRuns);
   };
 
   const clearActiveRunIfMatch = (runId: string) => {
@@ -182,16 +193,14 @@ export function createEventHandlers(context: EventHandlerContext) {
     }
     const evt = payload as ChatEvent;
     syncSessionKey();
+    if (suppressedRuns.has(evt.runId)) {
+      return;
+    }
     if (!isSameSessionKey(evt.sessionKey, state.currentSessionKey)) {
       return;
     }
     if (finalizedRuns.has(evt.runId)) {
-      if (evt.state === "delta") {
-        return;
-      }
-      if (evt.state === "final") {
-        return;
-      }
+      return;
     }
     noteSessionRun(evt.runId);
     if (!state.activeChatRunId) {
@@ -274,6 +283,9 @@ export function createEventHandlers(context: EventHandlerContext) {
     }
     const evt = payload as AgentEvent;
     syncSessionKey();
+    if (suppressedRuns.has(evt.runId)) {
+      return;
+    }
     // Agent events (tool streaming, lifecycle) are emitted per-run. Filter against the
     // active chat run id, not the session id. Tool results can arrive after the chat
     // final event, so accept finalized runs for tool updates.
@@ -335,5 +347,5 @@ export function createEventHandlers(context: EventHandlerContext) {
     }
   };
 
-  return { handleChatEvent, handleAgentEvent };
+  return { handleChatEvent, handleAgentEvent, noteSuppressedRun };
 }

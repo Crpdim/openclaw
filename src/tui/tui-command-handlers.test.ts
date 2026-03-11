@@ -13,6 +13,7 @@ function createHarness(params?: {
   loadHistory?: LoadHistoryMock;
   setActivityStatus?: SetActivityStatusMock;
   forgetLocalRunId?: ReturnType<typeof vi.fn>;
+  noteSuppressedRun?: ReturnType<typeof vi.fn>;
   isConnected?: boolean;
 }) {
   const sendChat = params?.sendChat ?? vi.fn().mockResolvedValue({ runId: "r1" });
@@ -26,6 +27,7 @@ function createHarness(params?: {
     params?.loadHistory ?? (vi.fn().mockResolvedValue(undefined) as LoadHistoryMock);
   const setActivityStatus = params?.setActivityStatus ?? (vi.fn() as SetActivityStatusMock);
   const forgetLocalRunId = params?.forgetLocalRunId ?? vi.fn();
+  const noteSuppressedRun = params?.noteSuppressedRun ?? vi.fn();
 
   const { handleCommand } = createCommandHandlers({
     client: { sendChat, waitForRun, resetSession } as never,
@@ -51,6 +53,7 @@ function createHarness(params?: {
     applySessionInfoFromPatch: vi.fn(),
     noteLocalRunId: vi.fn(),
     forgetLocalRunId,
+    noteSuppressedRun,
     requestExit: vi.fn(),
   });
 
@@ -66,6 +69,7 @@ function createHarness(params?: {
     loadHistory,
     setActivityStatus,
     forgetLocalRunId,
+    noteSuppressedRun,
   };
 }
 
@@ -189,11 +193,13 @@ describe("tui command handlers", () => {
     const setActivityStatus = vi.fn();
     const waitForRun = vi.fn().mockResolvedValue({ runId: "r1", status: "ok" });
     const forgetLocalRunId = vi.fn();
+    const noteSuppressedRun = vi.fn();
     const { handleCommand, requestRender } = createHarness({
       loadHistory,
       setActivityStatus,
       waitForRun,
       forgetLocalRunId,
+      noteSuppressedRun,
     });
 
     await handleCommand("/context");
@@ -205,7 +211,8 @@ describe("tui command handlers", () => {
       timeoutMs: 30_000,
     });
     expect(loadHistory).toHaveBeenCalledTimes(1);
-    expect(forgetLocalRunId).not.toHaveBeenCalled();
+    expect(noteSuppressedRun).toHaveBeenCalledWith(expect.any(String));
+    expect(forgetLocalRunId).toHaveBeenCalledWith(expect.any(String));
     expect(setActivityStatus).toHaveBeenLastCalledWith("idle");
     expect(requestRender).toHaveBeenCalled();
   });
@@ -217,9 +224,11 @@ describe("tui command handlers", () => {
       error: "model backend hung up",
     });
     const setActivityStatus = vi.fn();
-    const { handleCommand, addSystem } = createHarness({
+    const noteSuppressedRun = vi.fn();
+    const { handleCommand, addSystem, forgetLocalRunId } = createHarness({
       waitForRun,
       setActivityStatus,
+      noteSuppressedRun,
     });
 
     await handleCommand("/context");
@@ -227,6 +236,8 @@ describe("tui command handlers", () => {
     await Promise.resolve();
 
     expect(addSystem).toHaveBeenCalledWith("run error: model backend hung up");
+    expect(noteSuppressedRun).toHaveBeenCalledWith(expect.any(String));
+    expect(forgetLocalRunId).toHaveBeenCalledWith(expect.any(String));
     expect(setActivityStatus).toHaveBeenLastCalledWith("error");
   });
 
