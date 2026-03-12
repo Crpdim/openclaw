@@ -380,6 +380,9 @@ export function createSessionActions(context: SessionActionContext) {
       });
       setActivityStatus("aborted");
     } catch (err) {
+      // If the abort RPC fails, drop the local active-run pointer so Ctrl+C can
+      // fall back to the normal warn/exit path instead of looping forever.
+      state.activeChatRunId = null;
       chatLog.addSystem(`abort failed: ${String(err)}`);
       setActivityStatus("abort failed");
     }

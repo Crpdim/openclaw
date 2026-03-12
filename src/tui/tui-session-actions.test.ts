@@ -4,6 +4,61 @@ import { createSessionActions } from "./tui-session-actions.js";
 import type { TuiStateAccess } from "./tui-types.js";
 
 describe("tui session actions", () => {
+  it("clears the local active run when abort fails", async () => {
+    const abortChat = vi.fn().mockRejectedValue(new Error("gateway disconnected"));
+    const addSystem = vi.fn();
+    const requestRender = vi.fn();
+    const setActivityStatus = vi.fn();
+    const state: TuiStateAccess = {
+      agentDefaultId: "main",
+      sessionMainKey: "agent:main:main",
+      sessionScope: "global",
+      agents: [],
+      currentAgentId: "main",
+      currentSessionKey: "agent:main:main",
+      currentSessionId: null,
+      activeChatRunId: "run-1",
+      historyLoaded: false,
+      sessionInfo: {},
+      initialSessionApplied: true,
+      isConnected: false,
+      autoMessageSent: false,
+      toolsExpanded: false,
+      showThinking: false,
+      connectionStatus: "disconnected",
+      activityStatus: "running",
+      statusTimeout: null,
+      lastCtrlCAt: 0,
+    };
+
+    const { abortActive } = createSessionActions({
+      client: { abortChat } as unknown as GatewayChatClient,
+      chatLog: { addSystem } as unknown as import("./components/chat-log.js").ChatLog,
+      tui: { requestRender } as unknown as import("@mariozechner/pi-tui").TUI,
+      opts: {},
+      state,
+      agentNames: new Map(),
+      initialSessionInput: "",
+      initialSessionAgentId: null,
+      resolveSessionKey: vi.fn(),
+      updateHeader: vi.fn(),
+      updateFooter: vi.fn(),
+      updateAutocompleteProvider: vi.fn(),
+      setActivityStatus,
+    });
+
+    await abortActive();
+
+    expect(abortChat).toHaveBeenCalledWith({
+      sessionKey: "agent:main:main",
+      runId: "run-1",
+    });
+    expect(state.activeChatRunId).toBeNull();
+    expect(addSystem).toHaveBeenCalledWith("abort failed: Error: gateway disconnected");
+    expect(setActivityStatus).toHaveBeenCalledWith("abort failed");
+    expect(requestRender).toHaveBeenCalled();
+  });
+
   it("queues session refreshes and applies the latest result", async () => {
     let resolveFirst: ((value: unknown) => void) | undefined;
     let resolveSecond: ((value: unknown) => void) | undefined;
