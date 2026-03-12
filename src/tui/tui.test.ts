@@ -215,6 +215,34 @@ describe("resolveCtrlCAction", () => {
     });
   });
 
+  it("aborts the active run before using exit semantics", () => {
+    expect(
+      resolveCtrlCAction({
+        hasInput: false,
+        hasActiveRun: true,
+        now: 2000,
+        lastCtrlCAt: 0,
+      }),
+    ).toEqual({
+      action: "abort",
+      nextLastCtrlCAt: 0,
+    });
+  });
+
+  it("does not arm exit confirmation when ctrl+c aborts an active run", () => {
+    expect(
+      resolveCtrlCAction({
+        hasInput: false,
+        hasActiveRun: true,
+        now: 2000,
+        lastCtrlCAt: 1200,
+      }),
+    ).toEqual({
+      action: "abort",
+      nextLastCtrlCAt: 1200,
+    });
+  });
+
   it("exits on second ctrl+c within the exit window", () => {
     expect(resolveCtrlCAction({ hasInput: false, now: 2800, lastCtrlCAt: 2000 })).toEqual({
       action: "exit",

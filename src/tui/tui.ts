@@ -292,10 +292,11 @@ export function stopTuiSafely(stop: () => void): void {
   }
 }
 
-type CtrlCAction = "clear" | "warn" | "exit";
+type CtrlCAction = "abort" | "clear" | "warn" | "exit";
 
 export function resolveCtrlCAction(params: {
   hasInput: boolean;
+  hasActiveRun?: boolean;
   now: number;
   lastCtrlCAt: number;
   exitWindowMs?: number;
@@ -305,6 +306,12 @@ export function resolveCtrlCAction(params: {
     return {
       action: "clear",
       nextLastCtrlCAt: params.now,
+    };
+  }
+  if (params.hasActiveRun) {
+    return {
+      action: "abort",
+      nextLastCtrlCAt: params.lastCtrlCAt,
     };
   }
   if (params.now - params.lastCtrlCAt <= exitWindowMs) {
@@ -873,10 +880,15 @@ export async function runTui(opts: TuiOptions) {
     const now = Date.now();
     const decision = resolveCtrlCAction({
       hasInput: editor.getText().trim().length > 0,
+      hasActiveRun: Boolean(activeChatRunId),
       now,
       lastCtrlCAt,
     });
     lastCtrlCAt = decision.nextLastCtrlCAt;
+    if (decision.action === "abort") {
+      void abortActive();
+      return;
+    }
     if (decision.action === "clear") {
       editor.setText("");
       setActivityStatus("cleared input; press ctrl+c again to exit");
