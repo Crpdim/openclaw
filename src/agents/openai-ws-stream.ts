@@ -684,7 +684,8 @@ export function createOpenAIWebSocketStreamFn(
       const signal = opts.signal ?? (options as WsOptions | undefined)?.signal;
       const firstResponseTimeoutMs =
         typeof opts.firstResponseTimeoutMs === "number" &&
-        Number.isFinite(opts.firstResponseTimeoutMs)
+        Number.isFinite(opts.firstResponseTimeoutMs) &&
+        opts.firstResponseTimeoutMs > 0
           ? Math.max(1, Math.floor(opts.firstResponseTimeoutMs))
           : undefined;
 
@@ -917,7 +918,7 @@ export function createOpenAIWebSocketStreamFn(
             log.warn(
               `[ws-stream] first response timeout for session=${sessionId}; falling back to HTTP. error=${timeoutError.message}`,
             );
-            void fallbackToHttp(model, context, options, eventStream, opts.signal, {
+            void fallbackToHttp(model, context, options, eventStream, signal, {
               skipInitialStart: true,
             }).then(resolve, reject);
           }, firstResponseTimeoutMs);
