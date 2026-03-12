@@ -154,7 +154,7 @@ gateway still needs direct APNs credentials:
 ```bash
 export OPENCLAW_APNS_TEAM_ID="TEAMID"
 export OPENCLAW_APNS_KEY_ID="KEYID"
-export OPENCLAW_APNS_PRIVATE_KEY_P8='<contents of your APNs .p8 private key file>'
+export OPENCLAW_APNS_PRIVATE_KEY_P8="$(cat /path/to/AuthKey_KEYID.p8)"
 ```
 
 ## Discovery paths
