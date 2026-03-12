@@ -899,6 +899,7 @@ export function createOpenAIWebSocketStreamFn(
         if (firstResponseTimeoutMs) {
           firstResponseTimer = setTimeout(() => {
             const timeoutError = createFirstResponseTimeoutError(firstResponseTimeoutMs);
+            cleanup();
             // Reset the session completely so a late response.completed cannot
             // mutate previous_response_id for a turn that the caller already
             // treated as failed.
@@ -909,7 +910,6 @@ export function createOpenAIWebSocketStreamFn(
               /* ignore */
             }
             wsRegistry.delete(sessionId);
-            cleanup();
             if (transport === "websocket") {
               reject(timeoutError);
               return;

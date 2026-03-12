@@ -804,9 +804,10 @@ function wrapStreamDecodeXaiToolCallArguments(
 }
 
 export function resolveFirstResponseTimeoutMs(totalTimeoutMs: number): number {
-  const normalizedTotal = Number.isFinite(totalTimeoutMs)
-    ? Math.max(1, Math.floor(totalTimeoutMs))
-    : 1;
+  if (!Number.isFinite(totalTimeoutMs) || totalTimeoutMs <= 0) {
+    return 30_000;
+  }
+  const normalizedTotal = Math.max(1, Math.floor(totalTimeoutMs));
   const candidate = Math.min(30_000, Math.max(5_000, Math.floor(normalizedTotal / 3)));
   if (candidate < normalizedTotal) {
     return candidate;

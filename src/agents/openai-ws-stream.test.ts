@@ -927,6 +927,36 @@ describe("createOpenAIWebSocketStreamFn", () => {
     expect(streamSimpleCalls.length).toBeGreaterThanOrEqual(1);
   });
 
+  it("still falls back to HTTP when close() emits synchronously during first-response timeout", async () => {
+    const streamFn = createOpenAIWebSocketStreamFn("sk-test", "sess-sync-close-timeout", {
+      firstResponseTimeoutMs: 20,
+    });
+    const stream = streamFn(
+      modelStub as Parameters<typeof streamFn>[0],
+      contextStub as Parameters<typeof streamFn>[1],
+    );
+
+    await new Promise((r) => setImmediate(r));
+    const manager = MockManager.lastInstance!;
+    const originalClose = manager.close.bind(manager);
+    manager.close = () => {
+      manager.emit("close", 1000, "sync close");
+      originalClose();
+    };
+
+    const events: unknown[] = [];
+    for await (const ev of await resolveStream(stream)) {
+      events.push(ev);
+    }
+
+    const doneEvent = events.find((e) => (e as { type?: string }).type === "done") as
+      | { type: string; message: { content: Array<{ text: string }> } }
+      | undefined;
+    const errorEvent = events.find((e) => (e as { type?: string }).type === "error");
+    expect(doneEvent?.message.content[0]?.text).toBe("http fallback response");
+    expect(errorEvent).toBeUndefined();
+  });
+
   it("does not time out when the server sends an early response.created event", async () => {
     const streamFn = createOpenAIWebSocketStreamFn("sk-test", "sess-first-response-created", {
       firstResponseTimeoutMs: 20,

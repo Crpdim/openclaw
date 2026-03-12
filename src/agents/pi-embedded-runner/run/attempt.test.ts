@@ -619,6 +619,12 @@ describe("resolveFirstResponseTimeoutMs", () => {
     expect(resolveFirstResponseTimeoutMs(5_000)).toBe(4_000);
     expect(resolveFirstResponseTimeoutMs(1_500)).toBe(1_200);
   });
+
+  it("uses a stable default for non-finite or non-positive totals", () => {
+    expect(resolveFirstResponseTimeoutMs(Number.POSITIVE_INFINITY)).toBe(30_000);
+    expect(resolveFirstResponseTimeoutMs(Number.NaN)).toBe(30_000);
+    expect(resolveFirstResponseTimeoutMs(0)).toBe(30_000);
+  });
 });
 
 describe("isOllamaCompatProvider", () => {
