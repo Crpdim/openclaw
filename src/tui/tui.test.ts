@@ -229,6 +229,20 @@ describe("resolveCtrlCAction", () => {
     });
   });
 
+  it("prefers abort over clearing draft input when a run is active", () => {
+    expect(
+      resolveCtrlCAction({
+        hasInput: true,
+        hasActiveRun: true,
+        now: 2000,
+        lastCtrlCAt: 0,
+      }),
+    ).toEqual({
+      action: "abort",
+      nextLastCtrlCAt: 0,
+    });
+  });
+
   it("does not arm exit confirmation when ctrl+c aborts an active run", () => {
     expect(
       resolveCtrlCAction({
@@ -239,7 +253,7 @@ describe("resolveCtrlCAction", () => {
       }),
     ).toEqual({
       action: "abort",
-      nextLastCtrlCAt: 1200,
+      nextLastCtrlCAt: 0,
     });
   });
 

@@ -302,16 +302,16 @@ export function resolveCtrlCAction(params: {
   exitWindowMs?: number;
 }): { action: CtrlCAction; nextLastCtrlCAt: number } {
   const exitWindowMs = Math.max(1, Math.floor(params.exitWindowMs ?? 1000));
+  if (params.hasActiveRun) {
+    return {
+      action: "abort",
+      nextLastCtrlCAt: 0,
+    };
+  }
   if (params.hasInput) {
     return {
       action: "clear",
       nextLastCtrlCAt: params.now,
-    };
-  }
-  if (params.hasActiveRun) {
-    return {
-      action: "abort",
-      nextLastCtrlCAt: params.lastCtrlCAt,
     };
   }
   if (params.now - params.lastCtrlCAt <= exitWindowMs) {
