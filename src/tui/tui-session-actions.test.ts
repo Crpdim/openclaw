@@ -59,6 +59,69 @@ describe("tui session actions", () => {
     expect(requestRender).toHaveBeenCalled();
   });
 
+  it("does not clear a newer active run when an older abort fails", async () => {
+    let rejectAbort: ((reason?: unknown) => void) | undefined;
+    const abortChat = vi.fn().mockImplementation(
+      () =>
+        new Promise((_, reject) => {
+          rejectAbort = reject;
+        }),
+    );
+    const state: TuiStateAccess = {
+      agentDefaultId: "main",
+      sessionMainKey: "agent:main:main",
+      sessionScope: "global",
+      agents: [],
+      currentAgentId: "main",
+      currentSessionKey: "agent:main:main",
+      currentSessionId: null,
+      activeChatRunId: "run-old",
+      historyLoaded: false,
+      sessionInfo: {},
+      initialSessionApplied: true,
+      isConnected: true,
+      autoMessageSent: false,
+      toolsExpanded: false,
+      showThinking: false,
+      connectionStatus: "connected",
+      activityStatus: "running",
+      statusTimeout: null,
+      lastCtrlCAt: 0,
+    };
+    const addSystem = vi.fn();
+    const requestRender = vi.fn();
+    const setActivityStatus = vi.fn();
+    const clearAbortPending = vi.fn();
+
+    const { abortActive } = createSessionActions({
+      client: { abortChat } as unknown as GatewayChatClient,
+      chatLog: { addSystem } as unknown as import("./components/chat-log.js").ChatLog,
+      tui: { requestRender } as unknown as import("@mariozechner/pi-tui").TUI,
+      opts: {},
+      state,
+      agentNames: new Map(),
+      initialSessionInput: "",
+      initialSessionAgentId: null,
+      resolveSessionKey: vi.fn(),
+      updateHeader: vi.fn(),
+      updateFooter: vi.fn(),
+      updateAutocompleteProvider: vi.fn(),
+      setActivityStatus,
+      clearAbortPending,
+    });
+
+    const pending = abortActive();
+    state.activeChatRunId = "run-new";
+    rejectAbort?.(new Error("gateway disconnected"));
+    await pending;
+
+    expect(state.activeChatRunId).toBe("run-new");
+    expect(clearAbortPending).toHaveBeenCalledWith("run-old");
+    expect(addSystem).toHaveBeenCalledWith("abort failed: Error: gateway disconnected");
+    expect(setActivityStatus).toHaveBeenCalledWith("abort failed");
+    expect(requestRender).toHaveBeenCalled();
+  });
+
   it("clears stale active runs when chat.abort reports aborted: false", async () => {
     const abortChat = vi.fn().mockResolvedValue({ ok: true, aborted: false });
     const addSystem = vi.fn();

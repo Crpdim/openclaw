@@ -61,6 +61,11 @@ export function createSessionActions(context: SessionActionContext) {
   } = context;
   let refreshSessionInfoPromise: Promise<void> = Promise.resolve();
   let lastSessionDefaults: SessionInfoDefaults | null = null;
+  const clearActiveRunIfMatches = (runId: string) => {
+    if (state.activeChatRunId === runId) {
+      state.activeChatRunId = null;
+    }
+  };
 
   const applyAgentsResult = (result: GatewayAgentsList) => {
     state.agentDefaultId = normalizeAgentId(result.defaultId);
@@ -392,14 +397,14 @@ export function createSessionActions(context: SessionActionContext) {
       if (result?.aborted) {
         setActivityStatus("aborted");
       } else {
-        state.activeChatRunId = null;
+        clearActiveRunIfMatches(runId);
         clearAbortPending?.(runId);
         setActivityStatus("idle");
       }
     } catch (err) {
       // If the abort RPC fails, drop the local active-run pointer so Ctrl+C can
       // fall back to the normal warn/exit path instead of looping forever.
-      state.activeChatRunId = null;
+      clearActiveRunIfMatches(runId);
       clearAbortPending?.(runId);
       chatLog.addSystem(`abort failed: ${String(err)}`);
       setActivityStatus("abort failed");
